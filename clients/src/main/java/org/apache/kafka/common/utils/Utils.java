@@ -775,8 +775,9 @@ public final class Utils {
 
     /**
      * Attempts to move source to target atomically and falls back to a non-atomic move if it fails.
-     *
+     *尝试将源以原子的方式移动到目标，如果失败，则返回到非原子的移动
      * @throws IOException if both atomic and non-atomic moves fail
+     * 如果原子和非原子移动都失败，则抛出IOException
      */
     public static void atomicMoveWithFallback(Path source, Path target) throws IOException {
         try {

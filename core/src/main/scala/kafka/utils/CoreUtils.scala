@@ -244,6 +244,7 @@ object CoreUtils extends Logging {
 
   /**
    * Execute the given function inside the lock
+    * 在锁中执行给定的函数
    */
   def inLock[T](lock: Lock)(fun: => T): T = {
     lock.lock()

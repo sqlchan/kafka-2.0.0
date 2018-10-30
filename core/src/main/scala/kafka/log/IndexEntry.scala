@@ -20,7 +20,7 @@ package kafka.log
 import org.apache.kafka.common.requests.ListOffsetResponse
 
 sealed trait IndexEntry {
-  // We always use Long for both key and value to avoid boxing.
+  // We always use Long for both key and value to avoid boxing. 我们总是使用Long键和value来避免拳击
   def indexKey: Long
   def indexValue: Long
 }
@@ -36,10 +36,11 @@ case class OffsetPosition(offset: Long, position: Int) extends IndexEntry {
 }
 
 
-/**
+/**时间戳与消息偏移之间的映射
+  * 该条目意味着其时间戳大于该时间戳的任何消息必须在该偏移量处或之后。
  * The mapping between a timestamp to a message offset. The entry means that any message whose timestamp is greater
  * than that timestamp must be at or after that offset.
- * @param timestamp The max timestamp before the given offset.
+ * @param timestamp The max timestamp before the given offset.  给定偏移量之前的最大时间戳。
  * @param offset The message offset.
  */
 case class TimestampOffset(timestamp: Long, offset: Long) extends IndexEntry {
