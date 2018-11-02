@@ -383,6 +383,7 @@ object ProducerStateManager {
     new Field(CrcField, Type.UNSIGNED_INT32, "CRC of the snapshot data"),
     new Field(ProducerEntriesField, new ArrayOf(ProducerSnapshotEntrySchema), "The entries in the producer table"))
 
+  //读取快照
   def readSnapshot(file: File): Iterable[ProducerStateEntry] = {
     try {
       val buffer = Files.readAllBytes(file.toPath)
@@ -510,15 +511,18 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   private var lastSnapOffset = 0L
 
   // ongoing transactions sorted by the first offset of the transaction
+  //正在进行的事务按事务的第一个偏移量排序
   private val ongoingTxns = new util.TreeMap[Long, TxnMetadata]
 
   // completed transactions whose markers are at offsets above the high watermark
+  //已完成的事务，其标记位于高水印之上的偏移量
   private val unreplicatedTxns = new util.TreeMap[Long, TxnMetadata]
 
   /**
-   * An unstable offset is one which is either undecided (i.e. its ultimate outcome is not yet known),
-   * or one that is decided, but may not have been replicated (i.e. any transaction which has a COMMIT/ABORT
-   * marker written at a higher offset than the current high watermark).
+   * An unstable offset is one which is either undecided or one that is decided, but may not have been replicated(i.e. its ultimate outcome is not yet known),
+    * 不稳定偏移量是指未确定的偏移量或已确定的偏移量，但可能没有复制
+   *  (i.e. any transaction which has a COMMIT/ABORT
+   * marker written at a higher offset than the current high watermark). 在比当前高水印高的偏移量上书写的标记
    */
   def firstUnstableOffset: Option[LogOffsetMetadata] = {
     val unreplicatedFirstOffset = Option(unreplicatedTxns.firstEntry).map(_.getValue.firstOffset)
@@ -534,31 +538,32 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   /**
-   * Acknowledge all transactions which have been completed before a given offset. This allows the LSO
-   * to advance to the next unstable offset.
+   * Acknowledge all transactions which have been completed before a given offset. This allows the LSO to advance to the next unstable offset.
+   * 确认在给定的抵消之前已经完成的所有事务。这允许LSO前进到下一个不稳定的偏移
    */
   def onHighWatermarkUpdated(highWatermark: Long): Unit = {
     removeUnreplicatedTransactions(highWatermark)
   }
 
   /**
-   * The first undecided offset is the earliest transactional message which has not yet been committed
-   * or aborted.
+   * The first undecided offset is the earliest transactional message which has not yet been committed or aborted.
+   * 第一个未决定的偏移量是最早的尚未提交或终止的事务消息。
    */
   def firstUndecidedOffset: Option[Long] = Option(ongoingTxns.firstEntry).map(_.getValue.firstOffset.messageOffset)
 
   /**
-   * Returns the last offset of this map
+   * Returns the last offset of this map  返回此映射的最后偏移量
    */
   def mapEndOffset = lastMapOffset
 
   /**
-   * Get a copy of the active producers
+   * Get a copy of the active producers 获取活动生产者的副本
    */
   def activeProducers: immutable.Map[Long, ProducerStateEntry] = producers.toMap
 
   def isEmpty: Boolean = producers.isEmpty && unreplicatedTxns.isEmpty
 
+  // 从快照加载
   private def loadFromSnapshot(logStartOffset: Long, currentTime: Long) {
     while (true) {
       latestSnapshotFile match {
@@ -585,7 +590,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     }
   }
 
-  // visible for testing
+  // visible for testing  可见测试
   private[log] def loadProducerEntry(entry: ProducerStateEntry): Unit = {
     val producerId = entry.producerId
     producers.put(producerId, entry)
@@ -599,6 +604,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
   /**
    * Expire any producer ids which have been idle longer than the configured maximum expiration timeout.
+    * 使任何已闲置时间超过配置的最大过期超时的生产者 id 过期。
    */
   def removeExpiredProducers(currentTimeMs: Long) {
     producers.retain { case (_, lastEntry) =>
@@ -607,12 +613,13 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   /**
-   * Truncate the producer id mapping to the given offset range and reload the entries from the most recent
-   * snapshot in range (if there is one). Note that the log end offset is assumed to be less than
-   * or equal to the high watermark.
+   * Truncate the producer id mapping to the given offset range and reload the entries from the most recent snapshot in range (if there is one).
+    * 将生产者id映射到给定的偏移范围，并从范围内的最新快照(如果有的话)重新加载条目。
+   * Note that the log end offset is assumed to be less than or equal to the high watermark.
+   * 注意，日志结束偏移量假设小于或等于高水印。
    */
   def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long) {
-    // remove all out of range snapshots
+    // remove all out of range snapshots  删除所有超出范围的快照
     deleteSnapshotFiles(logDir, { snapOffset =>
       snapOffset > logEndOffset || snapOffset <= logStartOffset
     })
@@ -623,6 +630,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
       // since we assume that the offset is less than or equal to the high watermark, it is
       // safe to clear the unreplicated transactions
+      // 由于我们假设偏移量小于或等于高水印，因此清除未复制的事务是安全的
       unreplicatedTxns.clear()
       loadFromSnapshot(logStartOffset, currentTimeMs)
     } else {
@@ -644,7 +652,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   /**
-   * Update the mapping with the given append information
+   * Update the mapping with the given append information  使用给定的附加信息更新映射
    */
   def update(appendInfo: ProducerAppendInfo): Unit = {
     if (appendInfo.producerId == RecordBatch.NO_PRODUCER_ID)
@@ -671,32 +679,37 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   /**
-   * Get the last written entry for the given producer id.
+   * Get the last written entry for the given producer id. 获取给定生产者 id 的最后一个写入条目。
    */
   def lastEntry(producerId: Long): Option[ProducerStateEntry] = producers.get(producerId)
 
   /**
    * Take a snapshot at the current end offset if one does not already exist.
+    * 如果当前端偏移量不存在，则在当前端偏移量处进行快照。
    */
   def takeSnapshot(): Unit = {
     // If not a new offset, then it is not worth taking another snapshot
+    //如果不是一个新的偏移量，那么不值得再做一个快照
     if (lastMapOffset > lastSnapOffset) {
       val snapshotFile = Log.producerSnapshotFile(logDir, lastMapOffset)
       info(s"Writing producer snapshot at offset $lastMapOffset")
       writeSnapshot(snapshotFile, producers)
 
       // Update the last snap offset according to the serialized map
+      //根据已序列化的映射更新最后一个snap偏移量
       lastSnapOffset = lastMapOffset
     }
   }
 
   /**
    * Get the last offset (exclusive) of the latest snapshot file.
+    * 获取最新快照文件的最后一个偏移量(独占)
    */
   def latestSnapshotOffset: Option[Long] = latestSnapshotFile.map(file => offsetFromFile(file))
 
   /**
    * Get the last offset (exclusive) of the oldest snapshot file.
+    * 获取最旧快照文件的最后一个偏移量 (独占)。
    */
   def oldestSnapshotOffset: Option[Long] = oldestSnapshotFile.map(file => offsetFromFile(file))
 
@@ -706,13 +719,18 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   /**
-   * When we remove the head of the log due to retention, we need to clean up the id map. This method takes
-   * the new start offset and removes all producerIds which have a smaller last written offset. Additionally,
-   * we remove snapshots older than the new log start offset.
+   * When we remove the head of the log due to retention, we need to clean up the id map.
+    * 当由于保留而删除日志头时，我们需要清理id映射。
+    * This method takes the new start offset and removes all producerIds which have a smaller last written offset.
+    * 该方法获取新的开始偏移量，并删除所有上一次写入偏移量较小的producerIds
+   * Additionally, we remove snapshots older than the new log start offset.
+   *此外，我们删除了比新日志起始偏移量更老的快照。
    *
    * Note that snapshots from offsets greater than the log start offset may have producers included which
    * should no longer be retained: these producers will be removed if and when we need to load state from
    * the snapshot.
+    * 注意，来自大于日志起始偏移量的偏移量的快照可能包含生产者，这些生产者应该不再被保留:
+    * 当我们需要从快照加载状态时，这些生产者将被删除。
    */
   def truncateHead(logStartOffset: Long) {
     val evictedProducerEntries = producers.filter { case (_, producerState) =>
@@ -752,6 +770,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
   /**
    * Truncate the producer id mapping and remove all snapshots. This resets the state of the mapping.
+    * 截断生产者id映射并删除所有快照。这将重置映射的状态。
    */
   def truncate() {
     producers.clear()
@@ -763,7 +782,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   /**
-   * Complete the transaction and return the last stable offset.
+   * Complete the transaction and return the last stable offset.完成事务并返回最后的稳定偏移量。
    */
   def completeTxn(completedTxn: CompletedTxn): Long = {
     val txnMetadata = ongoingTxns.remove(completedTxn.firstOffset)

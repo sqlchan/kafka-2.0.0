@@ -358,7 +358,7 @@ public class Struct {
     }
 
     /**
-     * Write this struct to a buffer
+     * Write this struct to a buffer  将此结构体写入缓冲区
      */
     public void writeTo(ByteBuffer buffer) {
         this.schema.write(buffer, this);
