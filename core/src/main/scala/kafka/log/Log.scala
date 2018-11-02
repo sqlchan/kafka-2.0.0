@@ -108,8 +108,8 @@ case class LogAppendInfo(var firstOffset: Option[Long],
 }
 
 /**
- * A class used to hold useful metadata about a completed transaction. This is used to build
- * the transaction index after appending to the log.
+ * A class used to hold useful metadata about a completed transaction. This is used to build the transaction index after appending to the log.
+ *用于保存关于已完成事务的有用元数据的类。这用于在添加到日志后构建事务索引。
  *
  * @param producerId The ID of the producer
  * @param firstOffset The first offset (inclusive) of the transaction

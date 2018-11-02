@@ -34,8 +34,9 @@ import scala.collection.mutable.ListBuffer
 import scala.collection.{immutable, mutable}
 
 class CorruptSnapshotException(msg: String) extends KafkaException(msg)
+//损坏的快照异常
 
-
+//ValidationType及其子类型定义要对给定的ProducerAppendInfo实例执行验证的范围
 // ValidationType and its subtypes define the extent of the validation to perform on a given ProducerAppendInfo instance
 private[log] sealed trait ValidationType
 private[log] object ValidationType {
@@ -43,17 +44,20 @@ private[log] object ValidationType {
   /**
     * This indicates no validation should be performed on the incoming append. This is the case for all appends on
     * a replica, as well as appends when the producer state is being built from the log.
+    * 这表示不应该对传入追加执行验证。对于复制上的所有附加项，以及从日志中构建生产者状态时的附加项，都是如此。
     */
   case object None extends ValidationType
 
   /**
     * We only validate the epoch (and not the sequence numbers) for offset commit requests coming from the transactional
     * producer. These appends will not have sequence numbers, so we can't validate them.
+    * 我们只验证来自事务生成器的偏移提交请求的epoch(而不是序列号)。这些附加项没有序列号，因此我们无法验证它们
     */
   case object EpochOnly extends ValidationType
 
   /**
     * Perform the full validation. This should be used fo regular produce requests coming to the leader.
+    * 执行完整的验证。这应该用于经常向领导提出要求。
     */
   case object Full extends ValidationType
 }
@@ -73,7 +77,7 @@ private[log] object ProducerStateEntry {
   private[log] val NumBatchesToRetain = 5
   def empty(producerId: Long) = new ProducerStateEntry(producerId, mutable.Queue[BatchMetadata](), RecordBatch.NO_PRODUCER_EPOCH, -1, None)
 }
-
+// 批处理元数据
 private[log] case class BatchMetadata(lastSeq: Int, lastOffset: Long, offsetDelta: Int, timestamp: Long) {
   def firstSeq = lastSeq - offsetDelta
   def firstOffset = lastOffset - offsetDelta
@@ -89,8 +93,12 @@ private[log] case class BatchMetadata(lastSeq: Int, lastOffset: Long, offsetDelt
 }
 
 // the batchMetadata is ordered such that the batch with the lowest sequence is at the head of the queue while the
-// batch with the highest sequence is at the tail of the queue. We will retain at most ProducerStateEntry.NumBatchesToRetain
-// elements in the queue. When the queue is at capacity, we remove the first element to make space for the incoming batch.
+// batch with the highest sequence is at the tail of the queue.
+//批处理元数据的顺序是这样的:序列最低的批处理位于队列的头部，序列最高的批处理位于队列的尾部。
+// We will retain at most ProducerStateEntry.NumBatchesToRetain elements in the queue.
+//我们将保留大多数生产者的身份。队列中的NumBatchesToRetain元素。
+// When the queue is at capacity, we remove the first element to make space for the incoming batch.
+//当队列处于满负荷状态时，我们删除第一个元素，为进入的批处理腾出空间
 private[log] class ProducerStateEntry(val producerId: Long,
                                       val batchMetadata: mutable.Queue[BatchMetadata],
                                       var producerEpoch: Short,
@@ -141,7 +149,7 @@ private[log] class ProducerStateEntry(val producerId: Long,
   }
 
   def removeBatchesOlderThan(offset: Long): Unit = batchMetadata.dropWhile(_.lastOffset < offset)
-
+  //发现重复的批处理
   def findDuplicateBatch(batch: RecordBatch): Option[BatchMetadata] = {
     if (batch.producerEpoch != producerEpoch)
        None
@@ -150,6 +158,7 @@ private[log] class ProducerStateEntry(val producerId: Long,
   }
 
   // Return the batch metadata of the cached batch having the exact sequence range, if any.
+  // 返回缓存的批处理的批元数据，如果有，则返回精确的序列范围。
   def batchWithSequenceRange(firstSeq: Int, lastSeq: Int): Option[BatchMetadata] = {
     val duplicate = batchMetadata.filter { metadata =>
       firstSeq == metadata.firstSeq && lastSeq == metadata.lastSeq
@@ -169,19 +178,24 @@ private[log] class ProducerStateEntry(val producerId: Long,
 
 /**
  * This class is used to validate the records appended by a given producer before they are written to the log.
- * It is initialized with the producer's state after the last successful append, and transitively validates the
- * sequence numbers and epochs of each new record. Additionally, this class accumulates transaction metadata
- * as the incoming records are validated.
+  * 该类用于验证给定生产者在将记录写入日志之前附加的记录。
+ * It is initialized with the producer's state after the last successful append, and transitively validates the sequence numbers and epochs of each new record.
+  * 在最后一次成功的追加之后，用生产者的状态初始化它，并传递地验证每个新记录的序列号和epoch
+ *  Additionally, this class accumulates transaction metadata as the incoming records are validated.
+ * 此外，当传入记录被验证时，该类将累积事务元数据。
  *
- * @param producerId The id of the producer appending to the log
- * @param currentEntry  The current entry associated with the producer id which contains metadata for a fixed number of
- *                      the most recent appends made by the producer. Validation of the first incoming append will
- *                      be made against the latest append in the current entry. New appends will replace older appends
- *                      in the current entry so that the space overhead is constant.
- * @param validationType Indicates the extent of validation to perform on the appends on this instance. Offset commits
- *                       coming from the producer should have ValidationType.EpochOnly. Appends which aren't from a client
- *                       should have ValidationType.None. Appends coming from a client for produce requests should have
- *                       ValidationType.Full.
+ * @param producerId The id of the producer appending to the log   添加到日志的生产者的id
+ * @param currentEntry  The current entry associated with the producer id which contains metadata for a fixed number of the most recent appends made by the producer.
+  *                      与生产者id相关联的当前条目，该id包含生产者最近添加的固定数量的元数据。
+ *                      Validation of the first incoming append will  be made against the latest append in the current entry.
+  *                      第一个传入附加项的验证将针对当前条目中的最新附加项进行。
+ *                      New appends will replace older appends in the current entry so that the space overhead is constant.
+ *                      新追加将替换当前条目中的旧追加，以便空间开销保持不变。
+ * @param validationType Indicates the extent of validation to perform on the appends on this instance. Offset commits coming from the producer should have ValidationType.EpochOnly.
+  *                       指示对此实例上的追加执行的验证程度。来自生产者的偏移提交应该具有ValidationType.EpochOnly。
+ *                        Appends which aren't from a client should have ValidationType.None.
+ *                        Appends coming from a client for produce requests should have ValidationType.Full.
+ *
  */
 private[log] class ProducerAppendInfo(val producerId: Long,
                                       val currentEntry: ProducerStateEntry,
@@ -271,7 +285,7 @@ private[log] class ProducerAppendInfo(val producerId: Long,
 
     updatedEntry.currentTxnFirstOffset match {
       case Some(_) if !isTransactional =>
-        // Received a non-transactional message while a transaction is active
+        // Received a non-transactional message while a transaction is active  在事务处于活动状态时接收到非事务性消息
         throw new InvalidTxnStateException(s"Expected transactional write from producer $producerId")
 
       case None if isTransactional =>
@@ -313,11 +327,12 @@ private[log] class ProducerAppendInfo(val producerId: Long,
   def startedTransactions: List[TxnMetadata] = transactions.toList
 
   def maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata: LogOffsetMetadata): Unit = {
-    // we will cache the log offset metadata if it corresponds to the starting offset of
-    // the last transaction that was started. This is optimized for leader appends where it
-    // is only possible to have one transaction started for each log append, and the log
-    // offset metadata will always match in that case since no data from other producers
-    // is mixed into the append
+    // we will cache the log offset metadata if it corresponds to the starting offset of the last transaction that was started.
+    //如果日志偏移量元数据对应于上一次启动的事务的起始偏移量，那么我们将缓存日志偏移量元数据。
+    //  This is optimized for leader appends where it is only possible to have one transaction started for each log append,
+    // and the log offset metadata will always match in that case since no data from other producers is mixed into the append
+    // 这是为leader appends优化的，在这种情况下，每个日志append只可能启动一个事务，
+    // 日志偏移元数据在这种情况下总是匹配的，因为没有来自其他生产者的数据混合到append中
     transactions.headOption.foreach { txn =>
       if (txn.firstOffset.messageOffset == logOffsetMetadata.messageOffset)
         txn.firstOffset = logOffsetMetadata
@@ -356,7 +371,7 @@ object ProducerStateManager {
 
   val ProducerSnapshotEntrySchema = new Schema(
     new Field(ProducerIdField, Type.INT64, "The producer ID"),
-    new Field(ProducerEpochField, Type.INT16, "Current epoch of the producer"),
+    new Field(ProducerEpochField, Type.INT16, "Current epoch of the producer"), //当前批的生产者
     new Field(LastSequenceField, Type.INT32, "Last written sequence of the producer"),
     new Field(LastOffsetField, Type.INT64, "Last written offset of the producer"),
     new Field(OffsetDeltaField, Type.INT32, "The difference of the last sequence and first sequence in the last written batch"),
@@ -426,7 +441,7 @@ object ProducerStateManager {
     struct.writeTo(buffer)
     buffer.flip()
 
-    // now fill in the CRC
+    // now fill in the CRC   现在填写CRC
     val crc = Crc32C.compute(buffer, ProducerEntriesOffset, buffer.limit() - ProducerEntriesOffset)
     ByteUtils.writeUnsignedInt(buffer, CrcOffset, crc)
 
@@ -440,7 +455,7 @@ object ProducerStateManager {
 
   private def isSnapshotFile(file: File): Boolean = file.getName.endsWith(Log.ProducerSnapshotFileSuffix)
 
-  // visible for testing
+  // visible for testing  可见测试
   private[log] def listSnapshotFiles(dir: File): Seq[File] = {
     if (dir.exists && dir.isDirectory) {
       Option(dir.listFiles).map { files =>
@@ -461,20 +476,25 @@ object ProducerStateManager {
 }
 
 /**
- * Maintains a mapping from ProducerIds to metadata about the last appended entries (e.g.
- * epoch, sequence number, last offset, etc.)
+ * Maintains a mapping from ProducerIds to metadata about the last appended entries (e.g. epoch, sequence number, last offset, etc.)
+ * 维护从ProducerIds到元数据关于最后添加条目的映射(例如epoch、序号、最后偏移量等)。
  *
  * The sequence number is the last number successfully appended to the partition for the given identifier.
- * The epoch is used for fencing against zombie writers. The offset is the one of the last successful message
- * appended to the partition.
+  * 序列号是为给定标识符成功添加到分区的最后一个数字。
+ * The epoch is used for fencing against zombie writers. The offset is the one of the last successful message appended to the partition.
+ * 偏移量是附加到分区的最后一条成功消息。
  *
  * As long as a producer id is contained in the map, the corresponding producer can continue to write data.
- * However, producer ids can be expired due to lack of recent use or if the last written entry has been deleted from
- * the log (e.g. if the retention policy is "delete"). For compacted topics, the log cleaner will ensure
- * that the most recent entry from a given producer id is retained in the log provided it hasn't expired due to
- * age. This ensures that producer ids will not be expired until either the max expiration time has been reached,
- * or if the topic also is configured for deletion, the segment containing the last written offset has
- * been deleted.
+  * 只要映射中包含生产者id，对应的生产者就可以继续编写数据。
+ * However, producer ids can be expired due to lack of recent use or if the last written entry has been deleted from the log
+  * 但是，如果最近没有使用生产者id，或者上次写入的条目已经从日志中删除，生产者id可能会过期
+ *  (e.g. if the retention policy is "delete").
+ *  For compacted topics, the log cleaner will ensure that the most recent entry from a given producer id is retained in the log provided it hasn't expired due to age.
+  *  对于压缩主题，日志清理器将确保在日志中保留来自给定生产者id的最新条目，前提是该条目没有过期。
+ * This ensures that producer ids will not be expired until either the max expiration time has been reached,
+  * 这可以确保生产者id在达到最大过期时间之前不会过期
+ * or if the topic also is configured for deletion, the segment containing the last written offset has been deleted.
+ * 如果主题也配置为删除，则包含最后写入偏移量的段已被删除。
  */
 @nonthreadsafe
 class ProducerStateManager(val topicPartition: TopicPartition,

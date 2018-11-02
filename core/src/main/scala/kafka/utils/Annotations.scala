@@ -29,6 +29,7 @@ class threadsafe extends StaticAnnotation
 
 /**
  * Indicates that the annotated class is not threadsafe
+  * 指示带注释的类不是threadsafe
  */
 class nonthreadsafe extends StaticAnnotation
 
