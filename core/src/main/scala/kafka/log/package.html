@@ -17,8 +17,9 @@
 
 -->
 The log management system for Kafka.
-
+卡夫卡的日志管理系统。
 The entry point for this system is LogManager. LogManager is responsible for holding all the logs, and handing them out by topic/partition. It also handles the enforcement of the
 flush policy and retention policies.
-
+这个系统的入口点是LogManager。LogManager负责保存所有日志，并通过topicpartition分发它们。它还处理刷新策略和保留策略的执行。
 The Log itself is made up of log segments. A log is a FileRecords that contains the data and an OffsetIndex that supports reads by offset on the log.
+日志本身由日志段组成。日志是包含数据的FileRecords和支持通过偏移读取日志的OffsetIndex。
