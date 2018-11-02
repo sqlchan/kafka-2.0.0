@@ -902,11 +902,11 @@ public final class Utils {
     /**
      * Read data from the channel to the given byte buffer until there are no bytes remaining in the buffer or the end
      * of the file has been reached.
-     *
-     * @param channel File channel containing the data to read from
-     * @param destinationBuffer The buffer into which bytes are to be transferred
+     *将数据从通道读取到给定字节缓冲区, 直到缓冲区中没有剩余的字节或到达文件末尾为止。
+     * @param channel File channel containing the data to read from  包含要读取的数据的文件通道
+     * @param destinationBuffer The buffer into which bytes are to be transferred  要传输字节的缓冲区
      * @param position The file position at which the transfer is to begin; it must be non-negative
-     *
+     *开始传输的文件位置;它必须是非负数
      * @throws IllegalArgumentException If position is negative
      * @throws IOException If an I/O error occurs, see {@link FileChannel#read(ByteBuffer, long)} for details on the
      * possible exceptions

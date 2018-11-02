@@ -57,11 +57,12 @@ object LogAppendInfo {
 
 /**
  * Struct to hold various quantities we compute about each message set before appending to the log
- *
+ *在附加到日志之前，我们计算每个消息集的不同数量
  * @param firstOffset The first offset in the message set unless the message format is less than V2 and we are appending
  *                    to the follower.
- * @param lastOffset The last offset in the message set
- * @param maxTimestamp The maximum timestamp of the message set.
+  *                    消息集中的第一个偏移量，除非消息格式小于V2，我们将追加到follower。
+ * @param lastOffset The last offset in the message set 消息集中的最后一个偏移量
+ * @param maxTimestamp The maximum timestamp of the message set. 消息集的最大时间戳
  * @param offsetOfMaxTimestamp The offset of the message with the maximum timestamp.
  * @param logAppendTime The log append time (if used) of the message set, otherwise Message.NoTimestamp
  * @param logStartOffset The start offset of the log at the time of this append.

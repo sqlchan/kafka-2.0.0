@@ -35,11 +35,16 @@ private[log] case class TxnIndexSearchResult(abortedTransactions: List[AbortedTx
  * the start and end offsets for the aborted transactions and the last stable offset (LSO) at the time of
  * the abort. This index is used to find the aborted transactions in the range of a given fetch request at
  * the READ_COMMITTED isolation level.
- *
- * There is at most one transaction index for each log segment. The entries correspond to the transactions
- * whose commit markers were written in the corresponding log segment. Note, however, that individual transactions
- * may span multiple segments. Recovering the index therefore requires scanning the earlier segments in
- * order to find the start of the transactions.
+  * 事务索引为每个段维护关于中止的事务的元数据。这包括中止事务的开始和结束偏移量以及在中止时的最后一个稳定偏移量(LSO)
+ *此索引用于在读取提交隔离级别的给定fetch请求范围内查找中止的事务。
+ * There is at most one transaction index for each log segment.
+  * 每个日志段最多有一个事务索引
+  * The entries correspond to the transactions whose commit markers were written in the corresponding log segment.
+  * 条目对应于在相应日志段中写入提交标记的事务
+ *  Note, however, that individual transactions may span multiple segments.
+  *  但是, 请注意, 单个事务可能跨越多个段。
+ *  Recovering the index therefore requires scanning the earlier segments in order to find the start of the transactions.
+ *因此, 恢复索引需要扫描早期的段以查找事务的开始。
  */
 @nonthreadsafe
 class TransactionIndex(val startOffset: Long, @volatile var file: File) extends Logging {
@@ -108,6 +113,7 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     } finally file = f
   }
 
+  //截断
   def truncateTo(offset: Long): Unit = {
     val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
     var newLastOffset: Option[Long] = None
@@ -133,6 +139,7 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
           override def next(): (AbortedTxn, Int) = {
             try {
               val buffer = allocate()
+              //将数据从通道读取到给定字节缓冲区, 直到缓冲区中没有剩余的字节或到达文件末尾为止。
               Utils.readFully(channel, buffer, position)
               buffer.flip()
 
@@ -160,11 +167,12 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
 
   /**
    * Collect all aborted transactions which overlap with a given fetch range.
-   *
-   * @param fetchOffset Inclusive first offset of the fetch range
-   * @param upperBoundOffset Exclusive last offset in the fetch range
+   *收集与给定获取范围重叠的所有中止的事务。
+   * @param fetchOffset Inclusive first offset of the fetch range  获取范围的第一个偏移量
+   * @param upperBoundOffset Exclusive last offset in the fetch range  提取范围中的独占最后一个偏移量
    * @return An object containing the aborted transactions and whether the search needs to continue
    *         into the next log segment.
+    *         包含中止的事务以及搜索是否需要继续进入下一个日志段的对象。
    */
   def collectAbortedTxns(fetchOffset: Long, upperBoundOffset: Long): TxnIndexSearchResult = {
     val abortedTransactions = ListBuffer.empty[AbortedTxn]
@@ -180,7 +188,7 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
 
   /**
    * Do a basic sanity check on this index to detect obvious problems.
-   *
+   *对该索引进行基本的完整性检查，以发现明显的问题。
    * @throws CorruptIndexException if any problems are found.
    */
   def sanityCheck(): Unit = {
@@ -209,7 +217,7 @@ private[log] object AbortedTxn {
 
   val CurrentVersion: Short = 0
 }
-
+//中止的 Txn
 private[log] class AbortedTxn(val buffer: ByteBuffer) {
   import AbortedTxn._
 
