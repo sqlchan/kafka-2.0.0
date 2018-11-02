@@ -63,16 +63,16 @@ object LogAppendInfo {
   *                    消息集中的第一个偏移量，除非消息格式小于V2，我们将追加到follower。
  * @param lastOffset The last offset in the message set 消息集中的最后一个偏移量
  * @param maxTimestamp The maximum timestamp of the message set. 消息集的最大时间戳
- * @param offsetOfMaxTimestamp The offset of the message with the maximum timestamp.
- * @param logAppendTime The log append time (if used) of the message set, otherwise Message.NoTimestamp
- * @param logStartOffset The start offset of the log at the time of this append.
- * @param recordConversionStats Statistics collected during record processing, `null` if `assignOffsets` is `false`
- * @param sourceCodec The source codec used in the message set (send by the producer)
+ * @param offsetOfMaxTimestamp The offset of the message with the maximum timestamp. 消息的最大时间戳偏移量。
+ * @param logAppendTime The log append time (if used) of the message set, otherwise Message.NoTimestamp 日志追加时间 (如果使用) 的消息集
+ * @param logStartOffset The start offset of the log at the time of this append. 在此追加时日志的起始偏移量
+ * @param recordConversionStats Statistics collected during record processing, `null` if `assignOffsets` is `false` 记录处理过程中收集的统计信息
+ * @param sourceCodec The source codec used in the message set (send by the producer) 消息集中使用的源编解码器(由生产者发送)
  * @param targetCodec The target codec of the message set(after applying the broker compression configuration if any)
- * @param shallowCount The number of shallow messages
- * @param validBytes The number of valid bytes
- * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
- * @param lastOffsetOfFirstBatch The last offset of the first batch
+ * @param shallowCount The number of shallow messages  浅信息的数量
+ * @param validBytes The number of valid bytes 有效字节数
+ * @param offsetsMonotonic Are the offsets in this message set monotonically increasing 这个消息集中的偏移量是否单调递增
+ * @param lastOffsetOfFirstBatch The last offset of the first batch 第一批的最后一个偏移量
  */
 case class LogAppendInfo(var firstOffset: Option[Long],
                          var lastOffset: Long,
@@ -89,15 +89,16 @@ case class LogAppendInfo(var firstOffset: Option[Long],
                          lastOffsetOfFirstBatch: Long) {
   /**
    * Get the first offset if it exists, else get the last offset of the first batch
-   * For magic versions 2 and newer, this method will return first offset. For magic versions
-   * older than 2, we use the last offset of the first batch as an approximation of the first
-   * offset to avoid decompressing the data.
+   * For magic versions 2 and newer, this method will return first offset.
+    * 获取第一个偏移量(如果存在)，否则获取第一批魔法版本2和更新版本的最后一个偏移量，此方法将返回第一个偏移量
+   * For magic versions older than 2, we use the last offset of the first batch as an approximation of the first offset to avoid decompressing the data.
+   *对于大于2的magic版本，我们使用第一批的最后一个偏移量作为第一个偏移量的近似值，以避免解压数据。
    */
   def firstOrLastOffsetOfFirstBatch: Long = firstOffset.getOrElse(lastOffsetOfFirstBatch)
 
   /**
-   * Get the (maximum) number of messages described by LogAppendInfo
-   * @return Maximum possible number of messages described by LogAppendInfo
+   * Get the (maximum) number of messages described by LogAppendInfo 获取LogAppendInfo描述的(最大)消息数量
+   * @return Maximum possible number of messages described by LogAppendInfo LogAppendInfo描述的消息的最大可能数量
    */
   def numMessages: Long = {
     firstOffset match {
@@ -111,11 +112,11 @@ case class LogAppendInfo(var firstOffset: Option[Long],
  * A class used to hold useful metadata about a completed transaction. This is used to build the transaction index after appending to the log.
  *用于保存关于已完成事务的有用元数据的类。这用于在添加到日志后构建事务索引。
  *
- * @param producerId The ID of the producer
- * @param firstOffset The first offset (inclusive) of the transaction
+ * @param producerId The ID of the producer  生产者的ID
+ * @param firstOffset The first offset (inclusive) of the transaction  事务的第一个偏移量(包括)
  * @param lastOffset The last offset (inclusive) of the transaction. This is always the offset of the
  *                   COMMIT/ABORT control record which indicates the transaction's completion.
- * @param isAborted Whether or not the transaction was aborted
+ * @param isAborted Whether or not the transaction was aborted  事务是否中止
  */
 case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, isAborted: Boolean) {
   override def toString: String = {
@@ -129,15 +130,15 @@ case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, i
 
 /**
  * An append-only log for storing messages.
- *
+ *仅用于存储消息的追加日志。
  * The log is a sequence of LogSegments, each with a base offset denoting the first message in the segment.
+ *日志是一个日志段序列，每个日志段都有一个表示段中第一个消息的基偏移量。
+ * New log segments are created according to a configurable policy that controls the size in bytes or time interval for a given segment.
+ *  新的日志段是根据可配置策略创建的，该策略控制给定段的字节大小或时间间隔
  *
- * New log segments are created according to a configurable policy that controls the size in bytes or time interval
- * for a given segment.
- *
- * @param dir The directory in which log segments are created.
- * @param config The log configuration settings
- * @param logStartOffset The earliest offset allowed to be exposed to kafka client.
+ * @param dir The directory in which log segments are created. 创建日志段的目录。
+ * @param config The log configuration settings  日志配置设置
+ * @param logStartOffset The earliest offset allowed to be exposed to kafka client.  最早的偏移量允许暴露给kafka客户端。
  *                       The logStartOffset can be updated by :
  *                       - user's DeleteRecordsRequest
  *                       - broker's log retention
