@@ -69,8 +69,9 @@ object Defaults {
 case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] = Set.empty)
   extends AbstractConfig(LogConfig.configDef, props, false) {
   /**
-   * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
-   * should also go in [[kafka.server.KafkaServer.copyKafkaConfigToLog]].
+   * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig should also go in [[kafka.server.KafkaServer.copyKafkaConfigToLog]].
+    * 重要提示:从KafkaConfig传递给LogConfig的任何配置参数也应该进入[[kafka.server.KafkaServer.copyKafkaConfigToLog]]。
+   *
    */
   val segmentSize = getInt(LogConfig.SegmentBytesProp)
   val segmentMs = getLong(LogConfig.SegmentMsProp)
@@ -136,6 +137,7 @@ object LogConfig {
   val MessageDownConversionEnableProp = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG
 
   // Leave these out of TopicConfig for now as they are replication quota configs
+  // 暂时不要将它们放在TopicConfig之外，因为它们是复制配额config
   val LeaderReplicationThrottledReplicasProp = "leader.replication.throttled.replicas"
   val FollowerReplicationThrottledReplicasProp = "follower.replication.throttled.replicas"
 

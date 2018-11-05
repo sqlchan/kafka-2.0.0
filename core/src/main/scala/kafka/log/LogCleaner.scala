@@ -40,53 +40,66 @@ import scala.collection.{Set, mutable}
 
 /**
  * The cleaner is responsible for removing obsolete records from logs which have the "compact" retention strategy.
+  * 清洁工负责从具有“紧凑”保留策略的日志中删除过时的记录
  * A message with key K and offset O is obsolete if there exists a message with key K and offset O' such that O < O'.
+  * 带有键K和偏移量O的消息如果存在键K和偏移量O'这样的消息O < O
  *
- * Each log can be thought of being split into two sections of segments: a "clean" section which has previously been cleaned followed by a
- * "dirty" section that has not yet been cleaned. The dirty section is further divided into the "cleanable" section followed by an "uncleanable" section.
- * The uncleanable section is excluded from cleaning. The active log segment is always uncleanable. If there is a
- * compaction lag time set, segments whose largest message timestamp is within the compaction lag time of the cleaning operation are also uncleanable.
- *
- * The cleaning is carried out by a pool of background threads. Each thread chooses the dirtiest log that has the "compact" retention policy
- * and cleans that. The dirtiness of the log is guessed by taking the ratio of bytes in the dirty section of the log to the total bytes in the log.
- *
- * To clean a log the cleaner first builds a mapping of key=>last_offset for the dirty section of the log. See kafka.log.OffsetMap for details of
- * the implementation of the mapping.
+ * Each log can be thought of being split into two sections of segments: a "clean" section which has previously been cleaned followed by a "dirty" section that has not yet been cleaned.
+  * 可以将每个日志划分为两个部分:一个“干净”的部分(以前已经清理过)，然后是一个“脏”的部分(现在还没有清理过)。
+ * The dirty section is further divided into the "cleanable" section followed by an "uncleanable" section.
+  * 脏部分进一步分为“可清洗”部分和“不可清洗”部分。
+ * The uncleanable section is excluded from cleaning. The active log segment is always uncleanable.
+  * 不可清洗的部分不允许清洗。活动日志段总是不可清理的。
+ * If there is a compaction lag time set, segments whose largest message timestamp is within the compaction lag time of the cleaning operation are also uncleanable.
+ *如果存在压实滞后时间集，其最大消息时间戳在清理操作的压实滞后时间内的段也是不可清理的。
+ * The cleaning is carried out by a pool of background threads. Each thread chooses the dirtiest log that has the "compact" retention policy and cleans that.
+  * 清理工作由一组后台线程执行。每个线程选择具有“紧凑”保留策略的最脏的日志并进行清理。
+ *  The dirtiness of the log is guessed by taking the ratio of bytes in the dirty section of the log to the total bytes in the log.
+  *  通过计算日志中脏部分的字节数与日志中总字节数的比值，可以推测出日志的肮脏程度。
+ * To clean a log the cleaner first builds a mapping of key=>last_offset for the dirty section of the log. See kafka.log.OffsetMap for details of the implementation of the mapping.
+ *为了清理日志，清除器首先为日志的脏部分构建key=>last_offset映射。看到kafka.log。有关映射实现的详细信息，请参见OffsetMap。
  *
  * Once the key=>last_offset map is built, the log is cleaned by recopying each log segment but omitting any key that appears in the offset map with a
  * higher offset than what is found in the segment (i.e. messages with a key that appears in the dirty section of the log).
- *
+ *一旦构建了key=>last_offset映射，就可以通过重新操作每个日志段来清理日志，但是省略了在偏移映射中出现的键，其偏移量要比在段中找到的键大(即带有键的消息出现在日志的脏部分)。
  * To avoid segments shrinking to very small sizes with repeated cleanings we implement a rule by which if we will merge successive segments when
  * doing a cleaning if their log and index size are less than the maximum log and index size prior to the clean beginning.
- *
+ *为了避免在重复清洗时段缩到非常小的尺寸，我们实现了一个规则，如果在清洗时，如果它们的日志和索引大小小于清洁开始之前的最大日志和索引大小，我们将合并连续的段。
  * Cleaned segments are swapped into the log as they become available.
- *
+ *已清理的段在可用时被交换到日志中。
  * One nuance that the cleaner must handle is log truncation. If a log is truncated while it is being cleaned the cleaning of that log is aborted.
- *
+ *清洁器必须处理的一个细微差别是日志截断。如果一个日志在被清理时被截断，那么该日志的清理将被中止。
  * Messages with null payload are treated as deletes for the purpose of log compaction. This means that they receive special treatment by the cleaner.
+  * 为了进行日志压缩，使用空有效负载的消息被视为删除。这意味着他们要接受清洁工的特殊处理。
  * The cleaner will only retain delete records for a period of time to avoid accumulating space indefinitely. This period of time is configurable on a per-topic
  * basis and is measured from the time the segment enters the clean portion of the log (at which point any prior message with that key has been removed).
+  * 清除程序将只保留删除记录一段时间，以避免无限地积累空间。这段时间可以根据每个主题进行配置，并从段进入日志的干净部分(在此点上，任何带有该键的先前消息都已被删除)开始度量。
  * Delete markers in the clean section of the log that are older than this time will not be retained when log segments are being recopied as part of cleaning.
- *
- * Note that cleaning is more complicated with the idempotent/transactional producer capabilities. The following
- * are the key points:
+ *当日志段作为清理的一部分被重新使用时，删除日志清理部分中超过此时间的标记将不会被保留。
+ * Note that cleaning is more complicated with the idempotent/transactional producer capabilities. The following are the key points:
+ *请注意，使用幂等/事务性生产者功能进行清理更为复杂。以下是重点:
  *
  * 1. In order to maintain sequence number continuity for active producers, we always retain the last batch
  *    from each producerId, even if all the records from the batch have been removed. The batch will be removed
  *    once the producer either writes a new batch or is expired due to inactivity.
+  *    为了保持活跃生产者的序列号连续性，我们总是保留每个producerId的最后一批，即使该批的所有记录都已删除。一旦生产者写了一个新的批，或者由于不活动而过期，该批将被删除。
  * 2. We do not clean beyond the last stable offset. This ensures that all records observed by the cleaner have
  *    been decided (i.e. committed or aborted). In particular, this allows us to use the transaction index to
  *    collect the aborted transactions ahead of time.
+  *    我们没有清理超过最后一个稳定偏移量。这可以确保所有的记录都已被确定(即已提交或终止)。特别是，这允许我们使用事务索引来提前收集中止的事务。
  * 3. Records from aborted transactions are removed by the cleaner immediately without regard to record keys.
+  * 终止的事务中的记录被清理者立即删除，而与记录键无关。
  * 4. Transaction markers are retained until all record batches from the same transaction have been removed and
  *    a sufficient amount of time has passed to reasonably ensure that an active consumer wouldn't consume any
  *    data from the transaction prior to reaching the offset of the marker. This follows the same logic used for
  *    tombstone deletion.
+  *    事务标记被保留，直到同一事务的所有记录批次都被删除，并且有足够的时间来合理地确保活动消费者在达到标记的偏移量之前不会使用事务中的任何数据。这和墓碑删除的逻辑是一样的。
  *
  * @param initialConfig Initial configuration parameters for the cleaner. Actual config may be dynamically updated.
- * @param logDirs The directories where offset checkpoints reside
- * @param logs The pool of logs
- * @param time A way to control the passage of time
+  *                      清洗器的初始配置参数。实际的配置可以动态更新。
+ * @param logDirs The directories where offset checkpoints reside 偏移检查点所在的目录
+ * @param logs The pool of logs 日志池
+ * @param time A way to control the passage of time  一种控制时间流逝的方法
  */
 class LogCleaner(initialConfig: CleanerConfig,
                  val logDirs: Seq[File],
@@ -95,13 +108,15 @@ class LogCleaner(initialConfig: CleanerConfig,
                  time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup with BrokerReconfigurable
 {
 
-  /* Log cleaner configuration which may be dynamically updated */
+  /* Log cleaner configuration which may be dynamically updated  日志清理器配置，可以动态更新*/
   @volatile private var config = initialConfig
 
   /* for managing the state of partitions being cleaned. package-private to allow access in tests */
+  // 用于管理正在清理的分区的状态。包私有，允许在测试中访问
   private[log] val cleanerManager = new LogCleanerManager(logDirs, logs, logDirFailureChannel)
 
   /* a throttle used to limit the I/O of all the cleaner threads to a user-specified maximum rate */
+  // 用于将所有清除线程的I/O限制为用户指定的最大速率的一种节流
   private val throttler = new Throttler(desiredRatePerSec = config.maxIoBytesPerSecond,
                                         checkIntervalMs = 300,
                                         throttleDown = true,
@@ -109,15 +124,17 @@ class LogCleaner(initialConfig: CleanerConfig,
                                         "bytes",
                                         time = time)
 
-  /* the threads */
+  /* the threads 线程 */
   private val cleaners = mutable.ArrayBuffer[CleanerThread]()
 
   /* a metric to track the maximum utilization of any thread's buffer in the last cleaning */
+  // 在最后一次清洗中跟踪线程缓冲区的最大利用率的指标
   newGauge("max-buffer-utilization-percent",
            new Gauge[Int] {
              def value: Int = cleaners.map(_.lastStats).map(100 * _.bufferUtilization).max.toInt
            })
   /* a metric to track the recopy rate of each thread's last cleaning */
+  // 跟踪每个线程最后一次清理的重抄率的度量
   newGauge("cleaner-recopy-percent",
            new Gauge[Int] {
              def value: Int = {
@@ -127,13 +144,14 @@ class LogCleaner(initialConfig: CleanerConfig,
              }
            })
   /* a metric to track the maximum cleaning time for the last cleaning from each thread */
+  // 一种度量，用于跟踪从每个线程最后一次清洗的最大清洗时间
   newGauge("max-clean-time-secs",
            new Gauge[Int] {
              def value: Int = cleaners.map(_.lastStats).map(_.elapsedSecs).max.toInt
            })
 
   /**
-   * Start the background cleaning
+   * Start the background cleaning 开始后台清理
    */
   def startup() {
     info("Starting the log cleaner")
@@ -145,7 +163,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   }
 
   /**
-   * Stop the background cleaning
+   * Stop the background cleaning 停止后台清洗
    */
   def shutdown() {
     info("Shutting down the log cleaner.")
@@ -156,7 +174,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   override def reconfigurableConfigs: Set[String] = {
     LogCleaner.ReconfigurableConfigs
   }
-
+// validate重组
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     val newCleanerConfig = LogCleaner.cleanerConfig(newConfig)
     val numThreads = newCleanerConfig.numThreads
@@ -172,7 +190,9 @@ class LogCleaner(initialConfig: CleanerConfig,
 
   /**
     * Reconfigure log clean config. This simply stops current log cleaners and creates new ones.
+    * 重新配置日志清理配置。这只会停止当前的日志清洁器，并创建新的日志清洁器。
     * That ensures that if any of the cleaners had failed, new cleaners are created to match the new config.
+    * 这确保了如果任何一个清除程序失败了，就会创建新的清除程序来匹配新的配置。
     */
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     config = LogCleaner.cleanerConfig(newConfig)
@@ -181,8 +201,8 @@ class LogCleaner(initialConfig: CleanerConfig,
   }
 
   /**
-   *  Abort the cleaning of a particular partition, if it's in progress. This call blocks until the cleaning of
-   *  the partition is aborted.
+   *  Abort the cleaning of a particular partition, if it's in progress. This call blocks until the cleaning of the partition is aborted.
+   *如果某个分区正在进行清洗，则中止清洗。这个调用会阻塞，直到分区的清理被中止。
    */
   def abortCleaning(topicPartition: TopicPartition) {
     cleanerManager.abortCleaning(topicPartition)
@@ -190,6 +210,7 @@ class LogCleaner(initialConfig: CleanerConfig,
 
   /**
    * Update checkpoint file, removing topics and partitions that no longer exist
+    * 更新检查点文件，删除不再存在的主题和分区
    */
   def updateCheckpoints(dataDir: File) {
     cleanerManager.updateCheckpoints(dataDir, update=None)
@@ -205,6 +226,7 @@ class LogCleaner(initialConfig: CleanerConfig,
 
   /**
    * Truncate cleaner offset checkpoint for the given partition if its checkpointed offset is larger than the given offset
+    * 如果指定分区的检查点偏移量大于给定的偏移量，则截断指定分区的clean offset检查点
    */
   def maybeTruncateCheckpoint(dataDir: File, topicPartition: TopicPartition, offset: Long) {
     cleanerManager.maybeTruncateCheckpoint(dataDir, topicPartition, offset)
@@ -212,7 +234,9 @@ class LogCleaner(initialConfig: CleanerConfig,
 
   /**
    *  Abort the cleaning of a particular partition if it's in progress, and pause any future cleaning of this partition.
+    *  如果某个分区正在进行清洗，则中止清洗，并暂停以后对该分区的任何清洗。
    *  This call blocks until the cleaning of the partition is aborted and paused.
+    *  这个调用会阻塞，直到分区的清理被中止并暂停。
    */
   def abortAndPauseCleaning(topicPartition: TopicPartition) {
     cleanerManager.abortAndPauseCleaning(topicPartition)
@@ -220,6 +244,7 @@ class LogCleaner(initialConfig: CleanerConfig,
 
   /**
    *  Resume the cleaning of a paused partition. This call blocks until the cleaning of a partition is resumed.
+    *  继续清理暂停的分区。此调用将阻塞，直到重新清理分区为止。
    */
   def resumeCleaning(topicPartition: TopicPartition) {
     cleanerManager.resumeCleaning(topicPartition)
@@ -228,12 +253,12 @@ class LogCleaner(initialConfig: CleanerConfig,
   /**
    * For testing, a way to know when work has completed. This method waits until the
    * cleaner has processed up to the given offset on the specified topic/partition
+   *对于测试，一种知道什么时候工作已经完成的方法。此方法等待，直到清洁器在指定的主题/分区上处理了指定的偏移量
+   * @param topicPartition The topic and partition to be cleaned  要清理的主题和分区
+   * @param offset The first dirty offset that the cleaner doesn't have to clean  第一个不干净的偏移是清洁工不需要清洗的
+   * @param maxWaitMs The maximum time in ms to wait for cleaner  在ms中等待清洁器的最长时间
    *
-   * @param topicPartition The topic and partition to be cleaned
-   * @param offset The first dirty offset that the cleaner doesn't have to clean
-   * @param maxWaitMs The maximum time in ms to wait for cleaner
-   *
-   * @return A boolean indicating whether the work has completed before timeout
+   * @return A boolean indicating whether the work has completed before timeout 指示超时前工作是否已完成的布尔值
    */
   def awaitCleaned(topicPartition: TopicPartition, offset: Long, maxWaitMs: Long = 60000L): Boolean = {
     def isCleaned = cleanerManager.allCleanerCheckpoints.get(topicPartition).fold(false)(_ >= offset)
