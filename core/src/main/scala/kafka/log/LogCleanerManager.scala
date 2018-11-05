@@ -163,9 +163,10 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   }
 
   /**
-   *  Abort the cleaning of a particular partition, if it's in progress. This call blocks until the cleaning of
-   *  the partition is aborted.
+   *  Abort the cleaning of a particular partition, if it's in progress. This call blocks until the cleaning of the partition is aborted.
+   *如果某个分区正在进行清洗，则中止清洗。这个调用会阻塞，直到分区的清理被中止。
    *  This is implemented by first abortAndPausing and then resuming the cleaning of the partition.
+    *  这是通过先中止并恢复分区的清理来实现的。
    */
   def abortCleaning(topicPartition: TopicPartition) {
     inLock(lock) {
@@ -177,13 +178,20 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
   /**
    *  Abort the cleaning of a particular partition if it's in progress, and pause any future cleaning of this partition.
+    *  如果某个分区正在进行清洗，则中止清洗，并暂停以后对该分区的任何清洗。
    *  This call blocks until the cleaning of the partition is aborted and paused.
+    *  这个调用会阻塞，直到分区的清理被中止并暂停。
    *  1. If the partition is not in progress, mark it as paused.
+    *  如果分区没有进行，则将其标记为暂停。
    *  2. Otherwise, first mark the state of the partition as aborted.
+    *  否则，首先将分区的状态标记为中止。
    *  3. The cleaner thread checks the state periodically and if it sees the state of the partition is aborted, it
    *     throws a LogCleaningAbortedException to stop the cleaning task.
+    *     cleaner线程定期检查状态，如果它看到分区的状态被中止，就抛出LogCleaningAbortedException异常以停止清理任务。
    *  4. When the cleaning task is stopped, doneCleaning() is called, which sets the state of the partition as paused.
+    *  当清理任务停止时，调用doneclean()，它将分区的状态设置为pause。
    *  5. abortAndPauseCleaning() waits until the state of the partition is changed to paused.
+    *  abortandpauseclean()等待，直到分区的状态更改为暂停。
    */
   def abortAndPauseCleaning(topicPartition: TopicPartition) {
     inLock(lock) {
@@ -207,6 +215,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
   /**
    *  Resume the cleaning of a paused partition. This call blocks until the cleaning of a partition is resumed.
+    *  继续清理暂停的分区。此调用将阻塞，直到重新清理分区为止。
    */
   def resumeCleaning(topicPartition: TopicPartition) {
     inLock(lock) {
@@ -227,6 +236,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
   /**
    *  Check if the cleaning for a partition is in a particular state. The caller is expected to hold lock while making the call.
+    *  检查分区的清理是否处于特定状态。打电话时，呼叫者应保持锁住。
    */
   private def isCleaningInState(topicPartition: TopicPartition, expectedState: LogCleaningState): Boolean = {
     inProgress.get(topicPartition) match {
@@ -241,6 +251,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
   /**
    *  Check if the cleaning for a partition is aborted. If so, throw an exception.
+    *  检查分区的清理是否中止。如果是，抛出异常。
    */
   def checkCleaningAborted(topicPartition: TopicPartition) {
     inLock(lock) {
@@ -269,9 +280,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       try {
         checkpoints.get(sourceLogDir).flatMap(_.read().get(topicPartition)) match {
           case Some(offset) =>
-            // Remove this partition from the checkpoint file in the source log directory
+            // Remove this partition from the checkpoint file in the source log directory 从源日志目录中的检查点文件中删除此分区
             updateCheckpoints(sourceLogDir, None)
-            // Add offset for this partition to the checkpoint file in the source log directory
+            // Add offset for this partition to the checkpoint file in the source log directory 将此分区的偏移量添加到源日志目录中的检查点文件中
             updateCheckpoints(destLogDir, Option(topicPartition, offset))
           case None =>
         }
@@ -304,6 +315,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
   /**
    * Save out the endOffset and remove the given log from the in-progress set, if not aborted.
+    * 保存endOffset并从正在进行的集合中删除给定的日志(如果没有中止的话)。
    */
   def doneCleaning(topicPartition: TopicPartition, dataDir: File, endOffset: Long) {
     inLock(lock) {
