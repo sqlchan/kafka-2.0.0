@@ -139,22 +139,28 @@ case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, i
  * @param dir The directory in which log segments are created. 创建日志段的目录。
  * @param config The log configuration settings  日志配置设置
  * @param logStartOffset The earliest offset allowed to be exposed to kafka client.  最早的偏移量允许暴露给kafka客户端。
- *                       The logStartOffset can be updated by :
- *                       - user's DeleteRecordsRequest
- *                       - broker's log retention
- *                       - broker's log truncation
- *                       The logStartOffset is used to decide the following:
+ *                       The logStartOffset can be updated by :  logStartOffset可以更新
+ *                       - user's DeleteRecordsRequest  用户的删除记录请求
+ *                       - broker's log retention 经纪人的日志保留
+ *                       - broker's log truncation  代理的日志截断
+ *                       The logStartOffset is used to decide the following:  logStartOffset用于确定以下内容
  *                       - Log deletion. LogSegment whose nextOffset <= log's logStartOffset can be deleted.
+  *                       日志删除。可以删除其nextOffset = log的logStartOffset的log段。
  *                         It may trigger log rolling if the active segment is deleted.
+  *                         如果删除活动段，则可能触发日志滚动。
  *                       - Earliest offset of the log in response to ListOffsetRequest. To avoid OffsetOutOfRange exception after user seeks to earliest offset,
- *                         we make sure that logStartOffset <= log's highWatermark
- *                       Other activities such as log cleaning are not affected by logStartOffset.
- * @param recoveryPoint The offset at which to begin recovery--i.e. the first offset which has not been flushed to disk
- * @param scheduler The thread pool scheduler used for background actions
- * @param brokerTopicStats Container for Broker Topic Yammer Metrics
- * @param time The time instance used for checking the clock
+  *                       响应ListOffsetRequest命令的日志的最早偏移量。为了避免在用户寻求最早偏移后出现OffsetOutOfRange异常
+ *                         we make sure that logStartOffset <= log's highWatermark Other activities such as log cleaning are not affected by logStartOffset.
+  *                         我们确保logStartOffset = log的highWatermark其他活动如日志清理不受logStartOffset的影响
+ * @param recoveryPoint   恢复点 The offset at which to begin recovery--i.e. the first offset which has not been flushed to disk
+  *                        开始恢复的偏移量—即第一个未刷新到磁盘的偏移量
+ * @param scheduler The thread pool scheduler used for background actions  调度程序 用于后台操作的线程池调度程序
+ * @param brokerTopicStats Container for Broker Topic Yammer Metrics  代理主题统计数据  代理主题Yammer度量的容器
+ * @param time The time instance used for checking the clock  用于检查时钟的时间实例
  * @param maxProducerIdExpirationMs The maximum amount of time to wait before a producer id is considered expired
+  *                                  最高有效期限Ms   在认为生产者id过期之前等待的最长时间
  * @param producerIdExpirationCheckIntervalMs How often to check for producer ids which need to be expired
+  *                           producerId过期校验间隔Ms  多长时间检查一次需要过期的生产者id
  */
 @threadsafe
 class Log(@volatile var dir: File,
@@ -174,13 +180,15 @@ class Log(@volatile var dir: File,
 
   this.logIdent = s"[Log partition=$topicPartition, dir=${dir.getParent}] "
 
-  /* A lock that guards all modifications to the log */
+  /* A lock that guards all modifications to the log 一个锁，用来保护对日志的所有修改*/
   private val lock = new Object
   // The memory mapped buffer for index files of this log will be closed for index files of this log will be closed with either delete() or closeHandlers()
+  // 该日志的索引文件的内存映射缓冲区将被关闭，该日志的索引文件将被delete()或closeHandlers()关闭
   // After memory mapped buffer is closed, no disk IO operation should be performed for this log
+  // 在关闭内存映射缓冲区之后，不应该对该日志执行磁盘IO操作
   @volatile private var isMemoryMappedBufferClosed = false
 
-  /* last time it was flushed */
+  /* last time it was flushed   上次它被刷新了*/
   private val lastFlushedTime = new AtomicLong(time.milliseconds)
 
   def initFileSize: Int = {
@@ -193,7 +201,7 @@ class Log(@volatile var dir: File,
   def updateConfig(updatedKeys: Set[String], newConfig: LogConfig): Unit = {
     if ((updatedKeys.contains(LogConfig.RetentionMsProp)
       || updatedKeys.contains(LogConfig.MessageTimestampDifferenceMaxMsProp))
-      && topicPartition.partition == 0  // generate warnings only for one partition of each topic
+      && topicPartition.partition == 0  // generate warnings only for one partition of each topic 仅为每个主题的一个分区生成警告
       && newConfig.retentionMs < newConfig.messageTimestampDifferenceMaxMs)
       warn(s"${LogConfig.RetentionMsProp} for topic ${topicPartition.topic} is set to ${newConfig.retentionMs}. It is smaller than " +
         s"${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value ${newConfig.messageTimestampDifferenceMaxMs}. " +
@@ -218,6 +226,12 @@ class Log(@volatile var dir: File,
    * of each ongoing transaction in order to compute a new first unstable offset. It is possible, however,
    * that this could result in disagreement between replicas depending on when they began replicating the log.
    * In the worst case, the LSO could be seen by a consumer to go backwards.
+   * 作为不完整事务的一部分的最早的偏移量。这用于计算副本管理器中的最后一个稳定偏移量(LSO)。
+   * 注意，可能会从日志中删除真正的第一个不稳定偏移量(通过记录或段删除)。
+   * 在这种情况下，第一个不稳定的偏移量将指向日志起始偏移量，日志起始偏移量实际上可能是已完成事务的一部分，也可能根本不是事务的一部分。
+   * 但是，由于我们仅将LSO用于限制read_committed消费者获取已确定的数据（即已提交，已中止或非事务性），
+   * 因此这种临时滥用似乎是合理的，并使我们免于在删除后扫描日志以找到第一个每个正在进行的事务的偏移量，以便计算新的第一个不稳定偏移量
+   * 但是，这可能会导致副本之间的分歧，这取决于它们何时开始复制日志。在最坏的情况下，消费者可以看到LSO倒退。
    */
   @volatile var firstUnstableOffset: Option[LogOffsetMetadata] = None
 
@@ -225,10 +239,13 @@ class Log(@volatile var dir: File,
    * not eligible for deletion. This means that the active segment is only eligible for deletion if the high watermark
    * equals the log end offset (which may never happen for a partition under consistent load). This is needed to
    * prevent the log start offset (which is exposed in fetch responses) from getting ahead of the high watermark.
+   * 跟踪当前的高水位线，以确保包含其中或其上方偏移量的段不符合删除条件。
+   * 这意味着如果高水印等于日志结束偏移（在一致负载下，分区可能永远不会发生），则活动段仅符合删除条件。
+   * 这需要防止日志开始偏移（在获取响应中暴露）超出高水印。
    */
   @volatile private var replicaHighWatermark: Option[Long] = None
 
-  /* the actual segments of the log */
+  /* the actual segments of the log 日志的实际分段*/
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
 
   @volatile private var _leaderEpochCache: LeaderEpochCache = initializeLeaderEpochCache()
@@ -306,11 +323,15 @@ class Log(@volatile var dir: File,
   }
 
   /**
-   * Removes any temporary files found in log directory, and creates a list of all .swap files which could be swapped
-   * in place of existing segment(s). For log splitting, we know that any .swap file whose base offset is higher than
-   * the smallest offset .clean file could be part of an incomplete split operation. Such .swap files are also deleted
-   * by this method.
-   * @return Set of .swap files that are valid to be swapped in as segment files
+   * Removes any temporary files found in log directory, and creates a list of all . swap files which could be swapped in place of existing segment(s).
+    * 删除日志目录中找到的所有临时文件，并创建所有临时文件的列表。交换文件，可以交换代替现有的段
+    *
+   * For log splitting, we know that any swap file whose base offset is higher than the smallest offset clean file could be part of an incomplete split operation.
+    * 对于日志拆分，我们知道任何基本偏移高于最小偏移清理文件的交换文件可能是不完整拆分操作的一部分。
+   *  Such swap files are also deleted by this method.  此方法也会删除此类交换文件。
+    *
+    * @return Set of swap files that are valid to be swapped in as segment files
+    *         一组交换文件，这些文件作为段文件进行交换是有效的
    */
   private def removeTempFilesAndCollectSwapFiles(): Set[File] = {
 
@@ -337,9 +358,9 @@ class Log(@volatile var dir: File,
         minCleanedFileOffset = Math.min(offsetFromFileName(filename), minCleanedFileOffset)
         cleanFiles += file
       } else if (filename.endsWith(SwapFileSuffix)) {
-        // we crashed in the middle of a swap operation, to recover:
-        // if a log, delete the index files, complete the swap operation later
-        // if an index just delete the index files, they will be rebuilt
+        // we crashed in the middle of a swap operation, to recover:我们在交换操作中崩溃，以恢复：
+        // if a log, delete the index files, complete the swap operation later  如果是日志，删除索引文件，稍后完成交换操作
+        // if an index just delete the index files, they will be rebuilt  如果一个索引只是删除索引文件，它们将被重新构建
         val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
         info(s"Found file ${file.getAbsolutePath} from interrupted swap operation.")
         if (isIndexFile(baseFile)) {
@@ -354,6 +375,10 @@ class Log(@volatile var dir: File,
     // KAFKA-6264: Delete all .swap files whose base offset is greater than the minimum .cleaned segment offset. Such .swap
     // files could be part of an incomplete split operation that could not complete. See Log#splitOverflowedSegment
     // for more details about the split operation.
+    /**
+    删除所有基础偏移量大于最小清理段偏移量的交换文件。这样的交换文件可能是无法完成的不完整分割操作的一部分。
+    有关拆分操作的详细信息，请参阅Log splitOverflowedSegment。
+     */
     val (invalidSwapFiles, validSwapFiles) = swapFiles.partition(file => offsetFromFile(file) >= minCleanedFileOffset)
     invalidSwapFiles.foreach { file =>
       debug(s"Deleting invalid swap file ${file.getAbsoluteFile} minCleanedFileOffset: $minCleanedFileOffset")
@@ -363,6 +388,7 @@ class Log(@volatile var dir: File,
     }
 
     // Now that we have deleted all .swap files that constitute an incomplete split operation, let's delete all .clean files
+    // 现在我们已经删除了构成不完整分割操作的所有.swap文件，让我们删除所有.clean文件
     cleanFiles.foreach { file =>
       debug(s"Deleting stray .clean file ${file.getAbsolutePath}")
       Files.deleteIfExists(file.toPath)
@@ -373,17 +399,22 @@ class Log(@volatile var dir: File,
 
   /**
    * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded
-   * It is possible that we encounter a segment with index offset overflow in which case the LogSegmentOffsetOverflowException
-   * will be thrown. Note that any segments that were opened before we encountered the exception will remain open and the
-   * caller is responsible for closing them appropriately, if needed.
+    * 该方法不需要将IOException转换为KafkaStorageException，因为它只在加载所有日志之前调用
+   * It is possible that we encounter a segment with index offset overflow in which case the LogSegmentOffsetOverflowException will be thrown.
+    * 我们可能会遇到一个具有索引偏移量溢出的段，在这种情况下会抛出LogSegmentOffsetOverflowException。
+   *  Note that any segments that were opened before we encountered the exception will remain open and the caller is responsible for closing them appropriately, if needed.
+    *  注意，在遇到异常之前打开的任何段都将保持打开状态，如果需要的话，调用者将负责适当地关闭它们。
+   *
    * @throws LogSegmentOffsetOverflowException if the log directory contains a segment with messages that overflow the index offset
+    *                                           如果日志目录包含一个包含溢出索引偏移量的消息的段
    */
   private def loadSegmentFiles(): Unit = {
     // load segments in ascending order because transactional data from one segment may depend on the
+    //按升序加载段，因为来自一个段的事务数据可能依赖于它前面的段
     // segments that come before it
     for (file <- dir.listFiles.sortBy(_.getName) if file.isFile) {
       if (isIndexFile(file)) {
-        // if it is an index file, make sure it has a corresponding .log file
+        // if it is an index file, make sure it has a corresponding .log file 如果是索引文件，请确保它有相应的.log文件
         val offset = offsetFromFile(file)
         val logFile = Log.logFile(dir, offset)
         if (!logFile.exists) {
@@ -391,7 +422,7 @@ class Log(@volatile var dir: File,
           Files.deleteIfExists(file.toPath)
         }
       } else if (isLogFile(file)) {
-        // if it's a log file, load the corresponding log segment
+        // if it's a log file, load the corresponding log segment 如果是日志文件，加载相应的日志段
         val baseOffset = offsetFromFile(file)
         val timeIndexFileNewlyCreated = !Log.timeIndexFile(dir, baseOffset).exists()
         val segment = LogSegment.open(dir = dir,
@@ -473,14 +504,17 @@ class Log(@volatile var dir: File,
 
   /**
    * Load the log segments from the log files on disk and return the next offset.
-   * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs
-   * are loaded.
+    * 从磁盘上的日志文件加载日志段并返回下一个偏移量。
+   * This method does not need to convert IOException to KafkaStorageException because it is only called before all logs are loaded.
+   *此方法不需要将IOException转换为KafkaStorageException，因为它仅在加载所有日志之前调用
    * @throws LogSegmentOffsetOverflowException if we encounter a .swap file with messages that overflow index offset; or when
    *                                           we find an unexpected number of .log files with overflow
+    *                                          如果我们遇到带有溢出索引偏移的消息的.swap文件  / 我们发现溢出的.log文件数量超出预期
    */
   private def loadSegments(): Long = {
     // first do a pass through the files in the log directory and remove any temporary files
-    // and find any interrupted swap operations
+    // 首先执行日志目录中的文件传递并删除所有临时文件
+    // and find any interrupted swap operations  并找到任何中断的交换操作
     val swapFiles = removeTempFilesAndCollectSwapFiles()
 
     // Now do a second pass and load all the log and index files.
@@ -2001,10 +2035,11 @@ object Log {
 
   /**
    * Construct a log file name in the given dir with the given base offset and the given suffix
-   *
+   *使用给定的基偏移量和给定的后缀在给定的目录中构造一个日志文件名
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
    * @param suffix The suffix to be appended to the file name (e.g. "", ".deleted", ".cleaned", ".swap", etc.)
+    *               要附加到文件名上的后缀
    */
   def logFile(dir: File, offset: Long, suffix: String = ""): File =
     new File(dir, filenamePrefixFromOffset(offset) + LogFileSuffix + suffix)
