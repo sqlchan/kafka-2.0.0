@@ -21,6 +21,7 @@ import org.apache.kafka.common.Configurable;
 /**
  * A plugin interface that allows you to intercept (and possibly mutate) the records received by the producer before
  * they are published to the Kafka cluster.
+ * 一个插件接口，允许您在将记录发布到Kafka集群之前拦截(并且可能突变)生产者接收的记录
  * <p>
  * This class will get producer config properties via <code>configure()</code> method, including clientId assigned
  * by KafkaProducer if not specified in the producer config. The interceptor implementation needs to be aware that it will be
@@ -30,6 +31,7 @@ import org.apache.kafka.common.Configurable;
  * the user configures the interceptor with the wrong key and value type parameters, the producer will not throw an exception,
  * just log the errors.
  * <p>
+ *     可以从多个线程调用ProducerInterceptor回调。如果需要，拦截器实现必须确保线程安全。
  * ProducerInterceptor callbacks may be called from multiple threads. Interceptor implementation must ensure thread-safety, if needed.
  * <p>
  * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.

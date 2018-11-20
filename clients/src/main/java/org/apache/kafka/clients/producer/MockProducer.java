@@ -44,9 +44,11 @@ import static org.apache.kafka.common.serialization.ExtendedSerializer.Wrapper.e
 
 /**
  * A mock of the producer interface you can use for testing code that uses Kafka.
+ * 您可以使用它来测试使用Kafka的代码。
  * <p>
  * By default this mock will synchronously complete each send call successfully. However it can be configured to allow
  * the user to control the completion of the call and supply an optional error for the producer to throw.
+ * 默认情况下，这个mock将成功地同步完成每个发送调用。但是，可以将其配置为允许用户控制调用的完成，并提供一个可选的错误供生产者抛出。
  */
 public class MockProducer<K, V> implements Producer<K, V> {
 

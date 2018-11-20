@@ -57,6 +57,13 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>batch.size</code> */
     public static final String BATCH_SIZE_CONFIG = "batch.size";
+    /**
+    每当将多个记录发送到同一个分区时，生产者将尝试将记录批处理为更少的请求。这有助于客户端和服务器的性能。此配置以字节为单位控制默认批处理大小。
+    不会尝试批处理大于此大小的记录。
+    发送给代理的请求将包含多个批次，每个分区一个批次，每个分区可以发送数据。
+    小批处理将使批处理不那么常见，并可能降低吞吐量(批处理大小为零将完全禁用批处理)。
+    非常大的批处理大小可能会更浪费内存，因为我们总是会分配一个指定批处理大小的缓冲区，以预期会有更多的记录。
+     */
     private static final String BATCH_SIZE_DOC = "The producer will attempt to batch records together into fewer requests whenever multiple records are being sent"
                                                  + " to the same partition. This helps performance on both the client and the server. This configuration controls the "
                                                  + "default batch size in bytes. "
@@ -70,6 +77,13 @@ public class ProducerConfig extends AbstractConfig {
                                                  + "buffer of the specified batch size in anticipation of additional records.";
 
     /** <code>acks</code> */
+    /**
+     * 在考虑完成一个请求之前，生产者要求领导者已经收到的致谢的数量。这控制了发送的记录的持久性。允许以下设置
+     * acks=0  如果设置为零，那么生产者将不会等待任何来自服务器的确认。记录将立即添加到套接字缓冲区，并考虑发送。
+     * 在这种情况下，无法保证服务器是否收到了记录，重试配置也不会生效(因为客户机通常不会知道任何故障)。每个记录返回的偏移量总是设置为-1
+     * acks=1   这意味着领导者会将记录写入本地日志，但不会等待所有追随者的完全确认。在这种情况下，如果领导者在承认记录后立即失败，但在追随者复制它之前，记录将会丢失。
+     * acks=all   这意味着leader将等待完整的同步副本来确认记录。这保证了记录不会丢失，只要至少有一个同步副本仍然存在。这是最强有力的保证。这相当于acks=-1的设置。
+     */
     public static final String ACKS_CONFIG = "acks";
     private static final String ACKS_DOC = "The number of acknowledgments the producer requires the leader to have received before considering a request complete. This controls the "
                                            + " durability of records that are sent. The following settings are allowed: "
@@ -86,6 +100,15 @@ public class ProducerConfig extends AbstractConfig {
                                            + " acknowledge the record. This guarantees that the record will not be lost as long as at least one in-sync replica"
                                            + " remains alive. This is the strongest available guarantee. This is equivalent to the acks=-1 setting.";
 
+    /**
+     * 生产者将在请求传输之间到达的任何记录组合成单个批处理请求。
+     *通常情况下，只有当记录到达的速度快于发送的速度时，才会出现这种情况。
+     * 然而，在某些情况下，客户机可能希望减少请求的数量，即使在中等负载下也是如此。这个设置通过添加少量的人为延迟来实现这一点，
+     * 也就是说，生产者不会立即发送一条记录，而是等待到给定的延迟，以允许发送其他记录，以便将发送的记录打包在一起。这可以看作类似于纳格在TCP中的算法。
+     *这个设置了上限配料的延迟:一旦我们得到批大小配置值得记录的分区将会立即寄出不管这个设置,但是如果我们有不到这么多字节积累对于这个分区我们将“徘徊”在指定的时间等待更多的记录。
+     * 此设置默认为0(即没有延迟)。
+     * 设置LINGER MS CONFIG =5。例如，可以减少发送的请求数量，但在没有负载的情况下，对发送的记录的延迟会增加5ms。
+     */
     /** <code>linger.ms</code> */
     public static final String LINGER_MS_CONFIG = "linger.ms";
     private static final String LINGER_MS_DOC = "The producer groups together any records that arrive in between request transmissions into a single batched request. "
@@ -108,6 +131,10 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>receive.buffer.bytes</code> */
     public static final String RECEIVE_BUFFER_CONFIG = CommonClientConfigs.RECEIVE_BUFFER_CONFIG;
 
+    /**
+     * 请求的最大字节数。此设置将限制生产者在单个请求中发送记录批次的数量，以避免发送大量请求。这也有效地限制了最大记录批量大小。
+     * 注意，服务器对记录批处理大小有自己的上限，这可能与此不同。
+     */
     /** <code>max.request.size</code> */
     public static final String MAX_REQUEST_SIZE_CONFIG = "max.request.size";
     private static final String MAX_REQUEST_SIZE_DOC = "The maximum size of a request in bytes. This setting will limit the number of record "
@@ -121,6 +148,10 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>reconnect.backoff.max.ms</code> */
     public static final String RECONNECT_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG;
 
+    /**
+     * 配置控制KafkaProducer.send()和KafkaProducer.partitionsFor()将阻塞多长时间。
+     * 这些方法可以被阻塞，因为缓冲区已经满了，或者元数据不可用。在用户提供的序列化器或分区器中的阻塞不会被计入超时。
+     */
     /** <code>max.block.ms</code> */
     public static final String MAX_BLOCK_MS_CONFIG = "max.block.ms";
     private static final String MAX_BLOCK_MS_DOC = "The configuration controls how long <code>KafkaProducer.send()</code> and <code>KafkaProducer.partitionsFor()</code> will block."

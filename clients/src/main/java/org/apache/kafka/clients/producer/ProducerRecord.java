@@ -23,10 +23,13 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 /**
  * A key/value pair to be sent to Kafka. This consists of a topic name to which the record is being sent, an optional
  * partition number, and an optional key and value.
+ * 要发送到Kafka的键值对。这包括发送记录的主题名称、可选分区号和可选键和值。
  * <p>
  * If a valid partition number is specified that partition will be used when sending the record. If no partition is
  * specified but a key is present a partition will be chosen using a hash of the key. If neither key nor partition is
  * present a partition will be assigned in a round-robin fashion.
+ * 如果指定了有效的分区号，则在发送记录时将使用该分区。
+ * 如果没有指定分区，但存在一个键，则使用键的哈希值选择分区。如果不存在键或分区，分区将以循环方式分配。
  * <p>
  * The record also has an associated timestamp. If the user did not provide a timestamp, the producer will stamp the
  * record with its current time. The timestamp eventually used by Kafka depends on the timestamp type configured for
