@@ -167,17 +167,20 @@ public final class RecordAccumulator {
 
     /**
      * Add a record to the accumulator, return the append result
+     * 向累加器中添加一条记录，返回附加结果
      * <p>
      * The append result will contain the future metadata, and flag for whether the appended batch is full or a new batch is created
+     * 追加结果将包含未来的元数据，并标记已追加的批处理是否已满或已创建新批处理
      * <p>
      *
      * @param tp The topic/partition to which this record is being sent
      * @param timestamp The timestamp of the record
      * @param key The key for the record
      * @param value The value for the record
-     * @param headers the Headers for the record
+     * @param headers the Headers for the record    记录的标题
      * @param callback The user-supplied callback to execute when the request is complete
      * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
+     *                       用于阻塞缓冲区内存的最大时间(以毫秒为单位)
      */
     public RecordAppendResult append(TopicPartition tp,
                                      long timestamp,
@@ -187,12 +190,12 @@ public final class RecordAccumulator {
                                      Callback callback,
                                      long maxTimeToBlock) throws InterruptedException {
         // We keep track of the number of appending thread to make sure we do not miss batches in
-        // abortIncompleteBatches().
+        // abortIncompleteBatches().    我们跟踪附加线程的数量，以确保我们不会错过abortincompletebatch()中的批。
         appendsInProgress.incrementAndGet();
         ByteBuffer buffer = null;
         if (headers == null) headers = Record.EMPTY_HEADERS;
         try {
-            // check if we have an in-progress batch
+            // check if we have an in-progress batch    检查一下我们是否有一批在生产中
             Deque<ProducerBatch> dq = getOrCreateDeque(tp);
             synchronized (dq) {
                 if (closed)
@@ -246,12 +249,15 @@ public final class RecordAccumulator {
     }
 
     /**
-     *  Try to append to a ProducerBatch.
+     *  Try to append to a ProducerBatch.   尝试附加到生产批处理程序。
      *
      *  If it is full, we return null and a new batch is created. We also close the batch for record appends to free up
+     *  如果已满，则返回null，并创建一个新批处理。我们还关闭批记录追加，以释放压缩缓冲区等资源。
      *  resources like compression buffers. The batch will be fully closed (ie. the record batch headers will be written
      *  and memory records built) in one of the following cases (whichever comes first): right before send,
      *  if it is expired, or when the producer is closed.
+     *  这批货将全部关闭。记录批处理头将被写入，并且内存记录将被构建在以下一种情况中(无论哪种情况优先):
+     *  在发送之前，如果它过期了，或者生产者关闭了。
      */
     private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
                                          Callback callback, Deque<ProducerBatch> deque) {
@@ -600,6 +606,7 @@ public final class RecordAccumulator {
 
     /**
      * Get the deque for the given topic-partition, creating it if necessary.
+     * 获取给定主题分区的deque，必要时创建它。
      */
     private Deque<ProducerBatch> getOrCreateDeque(TopicPartition tp) {
         Deque<ProducerBatch> d = this.batches.get(tp);
@@ -647,6 +654,7 @@ public final class RecordAccumulator {
 
     /**
      * Initiate the flushing of data from the accumulator...this makes all requests immediately ready
+     * 从累加器发起数据刷新…这使所有的请求立即准备好
      */
     public void beginFlush() {
         this.flushesInProgress.getAndIncrement();
@@ -661,6 +669,7 @@ public final class RecordAccumulator {
 
     /**
      * Mark all partitions as ready to send and block until the send is complete
+     * 将所有分区标记为准备发送并阻塞，直到发送完成
      */
     public void awaitFlushCompletion() throws InterruptedException {
         try {

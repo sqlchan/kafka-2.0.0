@@ -389,6 +389,7 @@ public class Sender implements Runnable {
 
     /**
      * Start closing the sender (won't actually complete until all data is sent out)
+     * 开始关闭发送器(直到所有数据发出后才会真正完成)
      */
     public void initiateClose() {
         // Ensure accumulator is closed first to guarantee that no more appends are accepted after

@@ -45,14 +45,18 @@ public class ProducerInterceptors<K, V> implements Closeable {
      * The method calls {@link ProducerInterceptor#onSend(ProducerRecord)} method. ProducerRecord
      * returned from the first interceptor's onSend() is passed to the second interceptor onSend(), and so on in the
      * interceptor chain. The record returned from the last interceptor is returned from this method.
-     *
+     *当客户端将记录发送到 kafkaproder 时, 在键和值被序列化之前, 将调用这一点。
+     * 从第一个拦截器 onsend () 返回的生产记录被传递到拦截器链中的第二个拦截器 onsend (), 依此类推。
+     * 从最后一个拦截器返回的记录将从此方法返回。
      * This method does not throw exceptions. Exceptions thrown by any of interceptor methods are caught and ignored.
      * If an interceptor in the middle of the chain, that normally modifies the record, throws an exception,
      * the next interceptor in the chain will be called with a record returned by the previous interceptor that did not
      * throw an exception.
+     * 此方法不抛出异常。任何拦截器方法抛出的异常都会被捕获和忽略。
+     * 如果链中间的拦截器(通常会修改记录)抛出异常，则链中的下一个拦截器将被调用，并返回上一个未抛出异常的拦截器返回的记录。
      *
      * @param record the record from client
-     * @return producer record to send to topic/partition
+     * @return producer record to send to topic/partition   生产者记录发送到topicpartition
      */
     public ProducerRecord<K, V> onSend(ProducerRecord<K, V> record) {
         ProducerRecord<K, V> interceptRecord = record;
@@ -60,8 +64,8 @@ public class ProducerInterceptors<K, V> implements Closeable {
             try {
                 interceptRecord = interceptor.onSend(interceptRecord);
             } catch (Exception e) {
-                // do not propagate interceptor exception, log and continue calling other interceptors
-                // be careful not to throw exception from here
+                // do not propagate interceptor exception, log and continue calling other interceptors  不传播拦截器异常，日志和继续调用其他拦截器
+                // be careful not to throw exception from here  注意不要从这里抛出异常
                 if (record != null)
                     log.warn("Error executing interceptor onSend callback for topic: {}, partition: {}", record.topic(), record.partition(), e);
                 else
@@ -75,11 +79,16 @@ public class ProducerInterceptors<K, V> implements Closeable {
      * This method is called when the record sent to the server has been acknowledged, or when sending the record fails before
      * it gets sent to the server. This method calls {@link ProducerInterceptor#onAcknowledgement(RecordMetadata, Exception)}
      * method for each interceptor.
+     * 当发送到服务器的记录已被确认，或者在发送到服务器之前记录失败时，将调用此方法。
+     * 这个方法为每个拦截器调用{@link ProducerInterceptor# on确认(RecordMetadata, Exception)}方法。
      *
      * This method does not throw exceptions. Exceptions thrown by any of interceptor methods are caught and ignored.
+     * 此方法不抛出异常。任何拦截器方法抛出的异常都会被捕获和忽略。
      *
      * @param metadata The metadata for the record that was sent (i.e. the partition and offset).
+     *                 发送记录的元数据(即分区和偏移量)。
      *                 If an error occurred, metadata will only contain valid topic and maybe partition.
+     *                 如果发生错误，元数据将只包含有效的主题和分区。
      * @param exception The exception thrown during processing of this record. Null if no error occurred.
      */
     public void onAcknowledgement(RecordMetadata metadata, Exception exception) {

@@ -108,6 +108,7 @@ public final class Metadata implements Closeable {
 
     /**
      * Get the current cluster info without blocking
+     * 获得当前集群信息而不阻塞
      */
     public synchronized Cluster fetch() {
         return this.cluster;
@@ -137,6 +138,7 @@ public final class Metadata implements Closeable {
 
     /**
      * Request an update of the current cluster metadata info, return the current version before the update
+     * 请求更新当前集群元数据信息，在更新之前返回当前版本
      */
     public synchronized int requestUpdate() {
         this.needUpdate = true;
@@ -166,6 +168,7 @@ public final class Metadata implements Closeable {
 
     /**
      * Wait for metadata update until the current version is larger than the last version we know of
+     * 等待元数据更新，直到当前版本大于我们所知道的上一个版本
      */
     public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) throws InterruptedException {
         if (maxWaitMs < 0)
@@ -374,6 +377,7 @@ public final class Metadata implements Closeable {
 
     private synchronized void requestUpdateForNewTopics() {
         // Override the timestamp of last refresh to let immediate update.
+        // 重写上次刷新的时间戳，以便立即更新。
         this.lastRefreshMs = 0;
         requestUpdate();
     }

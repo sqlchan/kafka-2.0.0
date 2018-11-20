@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaException;
 /**
  * This exception is thrown if the producer is in non-blocking mode and the rate of data production exceeds the rate at
  * which data can be sent for long enough for the allocated buffer to be exhausted.
+ * 如果生产者处于非阻塞模式，并且数据生成的速率超过了数据可以发送足够长的时间以耗尽所分配的缓冲区的速率，则会引发此异常。
  */
 public class BufferExhaustedException extends KafkaException {
 

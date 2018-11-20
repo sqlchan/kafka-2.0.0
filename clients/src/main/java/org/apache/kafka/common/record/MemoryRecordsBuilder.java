@@ -269,6 +269,7 @@ public class MemoryRecordsBuilder {
     /**
      * Release resources required for record appends (e.g. compression buffers). Once this method is called, it's only
      * possible to update the RecordBatch header.
+     * 释放记录追加所需的资源(例如压缩缓冲区)。一旦调用了这个方法，就只能更新RecordBatch报头了。
      */
     public void closeForRecordAppends() {
         if (appendStream != CLOSED_STREAM) {
@@ -392,6 +393,7 @@ public class MemoryRecordsBuilder {
 
     /**
      * Append a record and return its checksum for message format v0 and v1, or null for v2 and above.
+     * 附加一条记录，并返回消息格式v0和v1的校验和，或v2及以上为空。
      */
     private Long appendWithOffset(long offset, boolean isControlRecord, long timestamp, ByteBuffer key,
                                   ByteBuffer value, Header[] headers) {
@@ -437,7 +439,7 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Append a new record at the given offset.
+     * Append a new record at the given offset. 在给定的偏移量上追加一个新记录。
      * @param offset The absolute offset of the record in the log buffer
      * @param timestamp The record timestamp
      * @param key The record key
@@ -463,6 +465,7 @@ public class MemoryRecordsBuilder {
 
     /**
      * Append a new record at the given offset.
+     * 在给定的偏移量上追加一个新记录。
      * @param offset The absolute offset of the record in the log buffer
      * @param timestamp The record timestamp
      * @param key The record key
@@ -495,7 +498,7 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Append a new record at the next sequential offset.
+     * Append a new record at the next sequential offset.   在下一个顺序偏移中追加一个新记录。
      * @param timestamp The record timestamp
      * @param key The record key
      * @param value The record value
@@ -518,12 +521,13 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Append a new record at the next sequential offset.
+     * Append a new record at the next sequential offset.   在下一个顺序偏移中追加一个新记录。
      * @param timestamp The record timestamp
      * @param key The record key
      * @param value The record value
-     * @param headers The record headers if there are any
+     * @param headers The record headers if there are any   记录头(如果有的话)
      * @return CRC of the record or null if record-level CRC is not supported for the message format
+     * 如果消息格式不支持记录级别的CRC，则记录级别的CRC为空
      */
     public Long append(long timestamp, byte[] key, byte[] value, Header[] headers) {
         return append(timestamp, wrapNullable(key), wrapNullable(value), headers);
@@ -605,6 +609,7 @@ public class MemoryRecordsBuilder {
     /**
      * Add a record with a given offset. The record must have a magic which matches the magic use to
      * construct this builder and the offset must be greater than the last appended record.
+     * 添加具有给定偏移量的记录。该记录必须具有与构造此构建器使用的魔法相匹配的魔法，并且偏移量必须大于最后添加的记录。
      * @param offset The offset of the record
      * @param record The record to add
      */
@@ -615,6 +620,7 @@ public class MemoryRecordsBuilder {
     /**
      * Append the record at the next consecutive offset. If no records have been appended yet, use the base
      * offset of this builder.
+     * 将记录追加到下一个连续偏移量。如果还没有附加记录，则使用此生成器的基本偏移量。
      * @param record The record to add
      */
     public void append(LegacyRecord record) {
@@ -703,7 +709,7 @@ public class MemoryRecordsBuilder {
 
     /**
      * Check if we have room for a new record containing the given key/value pair. If no records have been
-     * appended, then this returns true.
+     * appended, then this returns true.    检查是否有空间存放包含给定键值对的新记录。如果没有附加记录，则返回true。
      */
     public boolean hasRoomFor(long timestamp, byte[] key, byte[] value, Header[] headers) {
         return hasRoomFor(timestamp, wrapNullable(key), wrapNullable(value), headers);

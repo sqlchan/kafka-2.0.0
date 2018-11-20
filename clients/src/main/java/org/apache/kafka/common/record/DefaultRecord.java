@@ -171,6 +171,7 @@ public class DefaultRecord implements Record {
 
     /**
      * Write the record to `out` and return its size.
+     * 将记录写入“out”并返回其大小
      */
     public static int writeTo(DataOutputStream out,
                               int offsetDelta,
@@ -181,7 +182,7 @@ public class DefaultRecord implements Record {
         int sizeInBytes = sizeOfBodyInBytes(offsetDelta, timestampDelta, key, value, headers);
         ByteUtils.writeVarint(sizeInBytes, out);
 
-        byte attributes = 0; // there are no used record attributes at the moment
+        byte attributes = 0; // there are no used record attributes at the moment   目前没有使用过的记录属性
         out.write(attributes);
 
         ByteUtils.writeVarlong(timestampDelta, out);
@@ -427,7 +428,7 @@ public class DefaultRecord implements Record {
                                          int keySize,
                                          int valueSize,
                                          Header[] headers) {
-        int size = 1; // always one byte for attributes
+        int size = 1; // always one byte for attributes 属性总是一个字节
         size += ByteUtils.sizeOfVarint(offsetDelta);
         size += ByteUtils.sizeOfVarlong(timestampDelta);
         size += sizeOf(keySize, valueSize, headers);

@@ -97,8 +97,10 @@ public final class ProducerBatch {
 
     /**
      * Append the record to the current record set and return the relative offset within that record set
+     * 将记录追加到当前记录集，并返回该记录集中的相对偏移量
      *
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
+     * 与此记录对应的RecordSend方法，如果没有足够的空间，则为null
      */
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
@@ -114,6 +116,7 @@ public final class ProducerBatch {
                                                                    value == null ? -1 : value.length);
             // we have to keep every future returned to the users in case the batch needs to be
             // split to several new batches and resent.
+            // 我们必须将每一个未来都返回给用户，以防批处理需要拆分为多个新批并重新发送。
             thunks.add(new Thunk(callback, future));
             this.recordCount++;
             return future;
@@ -122,13 +125,15 @@ public final class ProducerBatch {
 
     /**
      * This method is only used by {@link #split(int)} when splitting a large batch to smaller ones.
+     * 这个方法只被{@link #split(int)}在将大批批分割成小批的时候使用。
      * @return true if the record has been successfully appended, false otherwise.
+     * 如果记录已成功添加，则为false。
      */
     private boolean tryAppendForSplit(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk thunk) {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return false;
         } else {
-            // No need to get the CRC.
+            // No need to get the CRC.  不需要得到CRC
             this.recordsBuilder.append(timestamp, key, value, headers);
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
                     recordsBuilder.compressionType(), key, value, headers));
@@ -136,7 +141,7 @@ public final class ProducerBatch {
                                                                    timestamp, thunk.future.checksumOrNull(),
                                                                    key == null ? -1 : key.remaining(),
                                                                    value == null ? -1 : value.remaining());
-            // Chain the future to the original thunk.
+            // Chain the future to the original thunk.  把未来系在最初的坦克上
             thunk.future.chain(future);
             this.thunks.add(thunk);
             this.recordCount++;
@@ -398,6 +403,7 @@ public final class ProducerBatch {
     /**
      * Release resources required for record appends (e.g. compression buffers). Once this method is called, it's only
      * possible to update the RecordBatch header.
+     * 释放记录追加所需的资源(例如压缩缓冲区)。一旦调用了这个方法，就只能更新RecordBatch报头了。
      */
     public void closeForRecordAppends() {
         recordsBuilder.closeForRecordAppends();
